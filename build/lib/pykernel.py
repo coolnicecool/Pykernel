@@ -36,6 +36,7 @@ try:
             ("atomWindowType", wintypes.ATOM),
             ("wCreatorVersion", wintypes.DWORD),
         ]
+    # get window info    
     info=WINDOWINFO()
     Length = os.get_terminal_size().lines-1
     Width = os.get_terminal_size().columns
@@ -45,6 +46,7 @@ try:
     CmdHeight=CmdBottom-CmdTop
     FontHeight=CmdHeight/Length
     FontWidth=CmdLength/Width
+
     class POINT(ctypes.Structure):
         _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
     pt=POINT()
@@ -80,7 +82,14 @@ try:
 
     GMEM_MOVEABLE = 0x0002
     GMEM_ZEROINIT = 0x0040
-
+    #functions
+    def HighestLen(NestedList:list): # for scroll bar find the highest len sublist
+        Greatest=0
+        for List in NestedList:
+            Len=len(List)
+            if Len>Greatest:
+                Greatest=Len
+        return Greatest        
     def get():
         OpenClipboard(None)
         
@@ -165,7 +174,7 @@ try:
                     return (1,0) 
                 if msvcrt.kbhit():            
                     return (0,ord(msvcrt.getch()))
-                (.01)    
+                wait(.01)    
         def queryMousePosition():
             global pt
             ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
@@ -277,7 +286,10 @@ try:
             for line in lines:
                 line=line.replace("\x00"," ")
                 para.append(list(line))
-                a.append(list(line))    
+                a.append(list(line))   
+            print()# to get calling pykernel out     
+            ###start 1    
+            scrollBar=[(0,-1),(0,-1)] # false for columns and false for lines
             Exit = 0
             number =0
             postulnar = [0, 0]
@@ -289,10 +301,12 @@ try:
             shortcut = 0
             Highlight = [0, [[]]]
             saver=0 
+            
             # \u001b[48;5;239m grey  \u001b[44m blue   \u001b[0m reset
             while Exit == 0:
                 output=1 
-                string = info+saves[Saved]+"\n"
+                string = info+saves[Saved]
+                string+=" "*(Width-len(string))
                 key = 0
                 Remove = ""
                 num = 0
@@ -303,12 +317,12 @@ try:
                     l=len(str(postulnar[1]+1+Length))               
                     Width-=l+1
                     n=postulnar[1]+1
-                for line in range(postulnar[1], postulnar[1]+Length-1):
+                for line in range(postulnar[1], postulnar[1]+Length):
                     if number:
                         nn=str(n)
                         string+="\u001b[38;5;245m"+"0"*(l-len(nn))+nn+"\u001b[0m"+" "
                         n+=1
-                    for char in range(postulnar[0], postulnar[0]+Width-1):
+                    for char in range(postulnar[0], postulnar[0]+Width):
                         try:
                             # pointer end highlighting
                             if Highlight[0] and [char, line] == Highlight[1][0]:
@@ -341,8 +355,7 @@ try:
                             else:
                                 string +=" "*left
                             break
-
-                    string += "\n"     
+  
                 if WordCount:
 
                     Count=0
@@ -352,15 +365,18 @@ try:
                 if Remove != "":
                     del para[Remove][-1]
                 string+="\u001b[0m"
-
+                if scrollBar[0][0]:
+                    string+=" "*int(postulnar[0]//scrollBar[0][1])+"\u001b[48;5;248m"+" "*int(Width*scrollBar[0][1])+"\u001b[0m"+" "*(Width-(int(postulnar[0]//scrollBar[0][1])+int(Width*scrollBar[0][1])))
                 print(string, end="",flush=1)
+                ###start 2
                 key = Input()
-                if key[0]:
+                if key[0]: # mouse 
                     MouseCords=queryMousePosition()
-                    if ((CmdRight>=MouseCords[0] and MouseCords[0]>=CmdLeft) and (CmdBottom>=MouseCords[1] and MouseCords[1]>=CmdTop)):
-                        lines=round((MouseCords[1]-CmdTop)/FontHeight-.4)# possible 1.1
-                        columns=round((MouseCords[0]-CmdLeft)/FontWidth)
-                        pointer=[(postulnar[0]+columns),(postulnar[1]+lines)]     
+                    if (CmdRight>=MouseCords[0] and MouseCords[0]>=CmdLeft) and (CmdBottom>=MouseCords[1] and MouseCords[1]>=CmdTop):
+                        lines=int(((MouseCords[1]-CmdTop)//FontHeight)) # possible 1.1 #ceil
+                        columns=int(((MouseCords[0]-CmdLeft)//FontWidth))
+                        NewPos=[postulnar[0]+columns,postulnar[1]+lines] # list so that if pointer != NewPos will work DO NOT TUPLIZE
+                        pointer=NewPos # change pointer to be where mouse was clicked           
                 else:
                     key=key[1]  
                     #input(key)    
@@ -637,8 +653,8 @@ try:
                             CmdLeft,CmdTop,CmdRight,CmdBottom=nfo.rcClient.left,nfo.rcClient.top,nfo.rcClient.right,nfo.rcClient.bottom
                             CmdLength=CmdRight-CmdLeft
                             CmdHeight=CmdBottom-CmdTop
-                            FontHeight=CmdHeight/Length
-                            FontWidth=CmdLength/Width
+                            FontHeight=CmdHeight//Length
+                            FontWidth=CmdLength//Width
                         if key==15: # open file
                             FileName=input("File Name:")  
                             del args[1:]
@@ -987,10 +1003,14 @@ try:
                 i=1        
                 if Highlight[0] == 1:
                     i = 2
+                #start of reformatting    
                 for i in range(i):
-                    if postulnar[1]>pointer[1]:
+
+                    if postulnar[1]>=len(para)-Length:# view past document
+                        postulnar[1]=len(para)-Length
+                    if postulnar[1]>pointer[1]: # view out of document
                         #print(-2)
-                        postulnar[1]=pointer[1]                   
+                        postulnar[1]=pointer[1]-1                   
                     if saver:
                         saving(1,0)
                     if pointer[1] >= len(para)-1:
@@ -1002,18 +1022,18 @@ try:
                     if pointer[1] < 0:
                         #print("1")
                         pointer,postulnar = [0, 0],[0,0]
-                    if pointer[1] >= len(para)-1:
+                    if pointer[1] >= len(para)-1: # pointer past document
                         #print("3")
-                        pointer[1] = len(para)-1
+                        pointer[1] = len(para)-1    
                     if pointer[0] > Width+postulnar[0]-2:
                         #print(4)
                         postulnar[0] +=pointer[0]-(Width+postulnar[0]-2)
-                    if pointer[1] > Length+postulnar[1]-2:
+                    if pointer[1] > Length+postulnar[1]-1:
                         #print(5)
-                        postulnar[1] += pointer[1]-(Length+postulnar[1]-2)
-                    if postulnar[0] > pointer[0]:
+                        postulnar[1] += pointer[1]-(Length+postulnar[1]-1)
+                    while postulnar[0] > pointer[0]:# pointer right of view
                         #print(6)
-                        postulnar[0] -= postulnar[0]-pointer[0]
+                        postulnar[0] -= (Width//2)
                 
                     if postulnar[0] < 0:
                         #print(7)
@@ -1022,9 +1042,25 @@ try:
                             pointer = [0, pointer[1]-1]
                     if i == 0:
                         p = pointer.copy()
-                        pointer = Highlight[1][0].copy()
+                        pointer = Highlight[1][0].copy()   
                 Highlight[1][0] = pointer.copy()
                 pointer = p.copy()
+                ###scroll bar code
+                # wBar=Width/HighestLen(para)
+                # lBar=Length/len(para)
+                # if scrollBar[0][0]:
+                #     if wBar>=1:
+                #         Length+=1
+                #         scrollBar[0]=(0,-1)
+                #     else:
+                #         scrollBar[0]=(1,wBar)    
+                # else:
+                #     if wBar<1:
+                #         Length-=1
+                #         scrollBar[0]=(1,wBar)
+
+
+                
 except KeyboardInterrupt:
     if not Saved:
         answer = input("Work Is Unsaved Do You Want To Save Your Work [y/n]:").lower()
