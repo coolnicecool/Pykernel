@@ -974,8 +974,8 @@ try:
                                     character+=1
                                 else:
                                     break                       
-                                pointer[1]+=1
-                                pointer[0]=character
+                            pointer[1]+=1
+                            pointer[0]=character
                         if key == 19:  # ^s
                             saving()
                         if key == 5:  # ^e
